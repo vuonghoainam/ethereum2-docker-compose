@@ -39,5 +39,13 @@ It's possible (however highly unlikely) that your local system already has a use
 ### My `docker-compose` command doesn't work (e. g. `ERROR: Version in "./docker-compose.yaml" is unsupported.`)
 Most linux distributions (including Ubuntu) don't serve recent docker-compose versions in their package management. You can install a compatible version by following [official docker.io documentation](https://docs.docker.com/compose/install/).
 
+```
+ethdo wallet create --type=hd --mnemonic="series drum switch attack pilot siege mirror mask drive code raven abandon direct glue dress only soft secret hurry occur depth evoke item silk" --wallet="lydiatest" --wallet-passphrase="hoainam96"
+
+ethdo account create --account="lydiatest/setup" --wallet-passphrase="hoainam96" --passphrase="hoainam96"
+
+cp -r ~/.config/ethereum2/wallets/* wallets/.
+```
+
 ## Support us!
 This software is provided under MIT license and therefore freely usable without restrictions. Dontations are welcome at [gitcoin.co](https://gitcoin.co/grants/1855/stereumnet) to make use of quadratic funding and make your contribution count even more! With your donation you help us build new features and keep our servers for testnet running. Thank you for every contribution!
