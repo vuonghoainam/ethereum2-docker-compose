@@ -14,7 +14,7 @@ metrics:
 # graffiti provides graffiti data.  Full details are in the separate document.
 graffiti:
   static:
-    value: stereum.net
+    value: lydia.xyz
 
 # submitter submits data to beacon nodes.  If not present the nodes in beacon-node-address above will be used.
 submitter:
@@ -54,4 +54,4 @@ accountmanager:
     client-key: file:///config/certs/vouch.key
     ca-cert: file:///config/certs/ca.crt
     accounts:
-      - .*
+      - lydiatest
