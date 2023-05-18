@@ -1,7 +1,23 @@
+# log-file is the location for Vouch log output.  If this is not provided logs will be written to the console.
+# log-file: /tmp/vouch.log
 # log-level is the global log level for Vouch logging.
+# Overrides can be set at any sub-level, giving fine-grained control over the specific
+# information logged.
 log-level: Debug
 
-beacon-node-address: lighthouse_beacon:5052
+# beacon-node-address is the address of the beacon node.  Can be lighthouse, nimbus, prysm or teku.
+# Overridden by beacon-node-addresses if present.
+beacon-node-address: localhost:4000
+
+# beacon-node-addresseses is the list of address of the beacon nodes.  Can be lighthouse, nimbus, prysm or teku.
+# If multiple addresses are supplied here it makes Vouch resilient in the situation where a beacon
+# node goes offline entirely.  If this occurs to the currently used node then the next in the list will
+# be used.  If a beacon node comes back online it is added to the end of the list of potential nodes to
+# use.
+#
+# Note that some beacon nodes have slightly different behavior in their events.  As such, users should
+# ensure they are happy with the event output of all beacon nodes in this list.
+beacon-node-addresses: [ prysm_beacon:4000, lighthouse_beacon:5052, nimbus_beacon:9190 ]
 
 # metrics is the module that logs metrics, in this case using prometheus.
 metrics:
@@ -16,42 +32,108 @@ graffiti:
   static:
     value: lydia.xyz
 
+# scheduler handles the scheduling of Vouch's operations.
+scheduler:
+  # style can be 'basic' (deprecated) or 'advanced' (default).  Do not use the basic scheduler unless instructed.
+  style: advanced
+
 # submitter submits data to beacon nodes.  If not present the nodes in beacon-node-address above will be used.
 submitter:
-  # style can currently only be 'all'
-  style: all
-  # beacon-node-addresses is the list of addresses to which submit.  Submissions run in parallel
-  beacon-node-addresses:
-#    - prysm_beacon:4000
-    - teku_beacon:5051
-    - lighthouse_beacon:5052
+  # style can currently only be 'multinode'
+  style: multinode
+  aggregateattestation:
+    # beacon-node-addresses are the addresses to which to submit aggregate attestations.
+    beacon-node-addresses: [ prysm_beacon:4000, lighthouse_beacon:5052, nimbus_beacon:9190 ]
+  attestation:
+    # beacon-node-addresses are the addresses to which to submit attestations.
+    beacon-node-addresses: [ prysm_beacon:4000, lighthouse_beacon:5052, nimbus_beacon:9190 ]
+  beaconblock:
+    # beacon-node-addresses are the addresses to which to submit beacon blocks.
+    beacon-node-addresses: [ localhost:4000, localhost:5051, localhost:5052]
+  beaconcommitteesubscription:
+    # beacon-node-addresses are the addresses to which to submit beacon committee subscriptions.
+    beacon-node-addresses: [ prysm_beacon:4000, lighthouse_beacon:5052, nimbus_beacon:9190 ]
+  proposalpreparation:
+    # beacon-node-addresses are the addresses to which to submit beacon proposal preparations.
+    beacon-node-addresses: [ prysm_beacon:4000, lighthouse_beacon:5052, nimbus_beacon:9190 ]
+  synccommitteecontribution:
+    # beacon-node-addresses are the addresses to which to submit beacon sync committee contributions.
+    beacon-node-addresses: [ prysm_beacon:4000, lighthouse_beacon:5052, nimbus_beacon:9190 ]
+  synccommitteemessage:
+    # beacon-node-addresses are the addresses to which to submit beacon sync committee messages.
+    beacon-node-addresses: [ prysm_beacon:4000, lighthouse_beacon:5052, nimbus_beacon:9190 ]
+  synccommitteesubscription:
+    # beacon-node-addresses are the addresses to which to submit beacon sync committee subscriptions.
+    beacon-node-addresses: [ prysm_beacon:4000, lighthouse_beacon:5052, nimbus_beacon:9190 ]
 
 # strategies provide advanced strategies for dealing with multiple beacon nodes
 strategies:
+  # The beaconblockproposal strategy obtains beacon block proposals from multiple beacon nodes.
   beaconblockproposal:
-    # style can be 'best', which obtains blocks from all nodes and compares them, or 'first', which uses the first returned
+    # style can be 'best', which obtains blocks from all nodes and selects the best, or 'first', which uses the first returned
     style: best
-    # beacon-node-addresses are the addresses of beacon nodes to use for this strategy.
-    beacon-node-addresses:
-#      - prysm_beacon:4000
-      - teku_beacon:5051
-      - lighthouse_beacon:5052
+    # beacon-node-addresses are the addresses from which to receive beacon block proposals.
+    beacon-node-addresses: [ localhost:4000, localhost:5051, localhost:5052]
+    # timeout defines the maximum amount of time the strategy will wait for a response.  As soon as a response from all beacon
+    # nodes has been obtained,the strategy will return with the best.  Half-way through the timeout period, Vouch will check to see
+    # if there have been any responses from the beacon nodes, and if so will return with the best.
+    # This allows Vouch to remain responsive in the situation where some beacon nodes are significantly slower than others, for
+    # example if one is remote.
+    timeout: 2s
+  # The blindedbeaconblockproposal strategy obtains blinded beacon block proposals from multiple beacon nodes when using the block
+  # relay module to obtain execution payloads from MEV relays.
+  blindedbeaconblockproposal:
+    # style can be 'best', which obtains blocks from all beacon nodes and selects the best, or 'first', which uses the first returned
+    style: best
+    # beacon-node-addresses are the addresses from which to receive beacon block proposals.
+    beacon-node-addresses: [ prysm_beacon:4000, lighthouse_beacon:5052, nimbus_beacon:9190 ]
+    # timeout defines the maximum amount of time the strategy will wait for a response.  As soon as a response from all beacon
+    # nodes has been obtained,the strategy will return with the best.  Half-way through the timeout period, Vouch will check to see
+    # if there have been any responses from the beacon nodes, and if so will return with the best.
+    # This allows Vouch to remain responsive in the situation where some beacon nodes are significantly slower than others, for
+    # example if one is remote.
+    timeout: 2s
   # The attestationdata strategy obtains attestation data from multiple sources.
   attestationdata:
-    # style can be 'best', which obtains attestations from all nodes and selects the best, or 'first', which uses the first returned
+    # style can be 'best', which obtains attestation data from all nodes and selects the best, or 'first', which uses the first returned
     style: best
-    # beacon-node-addresses are the addresses of beacon nodes to use for this strategy.
-    beacon-node-addresses:
-#      - prysm_beacon:4000
-      - teku_beacon:5051
-      - lighthouse_beacon:5052
+    # beacon-node-addresses are the addresses from which to receive attestation data.
+    beacon-node-addresses: [ prysm_beacon:4000, lighthouse_beacon:5052, nimbus_beacon:9190 ]
+  # The aggregateattestation strategy obtains aggregate attestations from multiple sources.
+  # Note that the list of nodes here must be a subset of those in the attestationdata strategy.  If not, the nodes will not have
+  # been gathering the attestations to aggregate and will error when the aggregate request is made.
+  aggregateattestation:
+    # style can be 'best', which obtains aggregates from all nodes and selects the best, or 'first', which uses the first returned
+    style: best
+    # beacon-node-addresses are the addresses from which to receive aggregate attestations.
+    # Note that prysm nodes are not supported at current in this strategy.
+    beacon-node-addresses: [ prysm_beacon:4000, lighthouse_beacon:5052, nimbus_beacon:9190 ]
+  # The synccommitteecontribution strategy obtains sync committee contributions from multiple sources.
+  synccommitteecontribution:
+    # style can be 'best', which obtains contributions from all nodes and selects the best, or 'first', which uses the first returned
+    style: best
+    # beacon-node-addresses are the addresses from which to receive sync committee contributions.
+    beacon-node-addresses: [ prysm_beacon:4000, lighthouse_beacon:5052, nimbus_beacon:9190 ]
 
-accountmanager:
-  dirk:
-    endpoints:
-      - dirk:13141
-    client-cert: file:///config/certs/vouch.crt
-    client-key: file:///config/certs/vouch.key
-    ca-cert: file:///config/certs/ca.crt
-    accounts:
-      - lydiatest
+# blockrelay provides information about working with local execution clients and remote relays for block proposals.
+# Configuration information for this section can be found in the execution layer documentation.
+blockrelay:
+  fallback-fee-recipient: '0x0000000000000000000000000000000000000001'
+
+# tracing sends OTLP trace data for all operations to the supplied endpoint.
+tracing:
+  # Address is the host and port of an OTLP trace receiver.
+  address: 'dirk:13141'
+  # If the endpoint is secure you will need to supply a client certificate and key, and optionall a CA certificate.
+  client-cert: file:///config/certs/vouch.crt
+  client-key: file:///config/certs/vouch.key
+  ca-cert: file:///config/certs/ca.crt
+
+dirk:
+  endpoints:
+    - dirk:13141
+  client-cert: file:///config/certs/vouch.crt
+  client-key: file:///config/certs/vouch.key
+  ca-cert: file:///config/certs/ca.crt
+  accounts:
+    - lydiatest

@@ -8,99 +8,172 @@ x-logging: &logging
       max-size: "100m"
 
 services:
-  stereum-init:
-    image: stereum/init:buster
-    restart: "no"
-    volumes:
-      - ./data/grafana:/mnt/grafana
-      - ./data/sigmaprime/lighthouse:/mnt/lighthouse
-      - ./data/sigmaprime/slasher:/mnt/slasher
-    <<: *logging
-
   geth:
-    container_name: geth
     image: ethereum/client-go:${GETH_DOCKER_TAG}
+    env_file: .env
     restart: unless-stopped
-    command: --goerli --http --http.port=8545 --http.addr=0.0.0.0 --http.vhosts="*" --allow-insecure-unlock --http.api="db,eth,net,web3,personal"
+    command: 
+      - geth
+      - --goerli
+      - --http
+      - --http.addr=0.0.0.0 
+      - --http.vhosts="*"
+      - --http.api="db,eth,net,web3,personal"
+      - --authrpc.jwtsecret=/root/jwtsecret
+      - --authrpc.vhosts=*
+      - --authrpc.addr=0.0.0.0
     stop_grace_period: 5m
     ports:
       - 30303:30303/tcp
       - 30303:30303/udp
-      - ${BEACON_API_IP}:8545:8545
+      - 8551:8551
     volumes:
       - ./data/geth:/root/.ethereum
+      - ./config/jwtsecret:/root/jwtsecret
     networks:
       - n_bridge
-      - stereum-admin
     <<: *logging
 
   prysm_beacon:
-    container_name: prysm_beacon
     image: gcr.io/prysmaticlabs/prysm/beacon-chain:${PRYSM_DOCKER_TAG}
     restart: unless-stopped
-    command: --config-file=/config/beacon.yaml
+    command:
+      - --prater
+      - --datadir=/data
+      - --jwt-secret=/jwtsecret
+      - --checkpoint-sync-url=https://goerli.beaconstate.info
+      - --genesis-beacon-api-url=https://goerli.beaconstate.info
+      - --execution-endpoint=http://geth:8551
+      - --suggested-fee-recipient=${SUGGESTED_FEE_RECIPIENT}
+      - --grpc-gateway-host=0.0.0.0
+      - --grpc-gateway-port=3500
+      - --rpc-host=0.0.0.0
+      - --rpc-port=4000
+      - --monitoring-host=0.0.0.0
+      - --p2p-tcp-port=13000
+      - --p2p-max-peers=100
+      - --accept-terms-of-use
     volumes:
-      - ./config/prysm/beacon.yaml:/config/beacon.yaml:ro
       - ./data/prysm/beacon:/data
       - ./data/prysm/genesis:/genesis
+      - ./config/jwtsecret:/jwtsecret
     ports:
-      - ${BEACON_API_IP}:4000:4000
-      - ${BEACON_API_IP}:8900:8080
-      - 13000:13000/tcp
-      - 12000:12000/udp
+      - 4000:4000
+      - 3500:3500
+      - 8900:8080
+      - 13000/tcp
+      - 12000/udp
     networks:
       - n_vouch_beacons
+      - n_slasher_beacon
       - n_bridge
-      - stereum-admin
+    <<: *logging
+
+  prysm_validator:
+    image: gcr.io/prysmaticlabs/prysm/validator:latest
+    restart: unless-stopped
+    user: "0"
+    command:
+      - --prater
+      - --datadir=/data
+      - --suggested-fee-recipient=${SUGGESTED_FEE_RECIPIENT}
+      - --monitoring-host=0.0.0.0
+      - --beacon-rpc-provider=prysm_beacon:4000
+      - --wallet-dir=/data/wallets
+      - --wallet-password-file=/data/passphrases
+    volumes:
+      - ./data/prysm/beacon-slasher:/data
+      - ./data/prysm/genesis:/genesis
+      - ./config/jwtsecret:/jwtsecret
+      - ./wallets:/data/wallets:ro
+      - ./config/dirk/passphrases:/data/passphrases:ro
+    depends_on:
+      - prysm_beacon
+    networks:
+      - n_slasher_beacon
+    <<: *logging
+
+  prysm_slasher:
+    image: gcr.io/prysmaticlabs/prysm/slasher:latest
+    restart: unless-stopped
+    command:
+      - --prater
+      - --datadir=/data
+      - --monitoring-host=0.0.0.0
+      - --beacon-rpc-provider=prysm_beacon:4000
+    volumes:
+      - ./data/prysm/beacon-slasher:/data
+      - ./data/prysm/genesis:/genesis
+      - ./config/jwtsecret:/jwtsecret
+    depends_on:
+      - prysm_beacon
+    networks:
+      - n_slasher_beacon
     <<: *logging
 
   lighthouse_beacon:
-    container_name: lighthouse_beacon
-    image: stereum/lighthouse:${LIGHTHOUSE_DOCKER_TAG}
-    user: "0"
-    depends_on:
-      - stereum-init
+    image: sigp/lighthouse:${LIGHTHOUSE_DOCKER_TAG}
     restart: unless-stopped
-    env_file: ./config/lighthouse/beacon.env
-    entrypoint: /opt/app/start/beacon.sh
+    env_file: .env
+    command:
+      - lighthouse 
+      - beacon_node
+      - --network=goerli
+      - --suggested-fee-recipient=${SUGGESTED_FEE_RECIPIENT}
+      - --execution-jwt=/root/jwtsecret
+      - --http 
+      - --http-address=0.0.0.0
+      - --checkpoint-sync-url=https://goerli.beaconstate.info
+      - --execution-endpoint=http://geth:8551
     volumes:
-      - ./data/sigmaprime/lighthouse:/opt/app/beacon
-      - ./data/sigmaprime/slasher:/opt/app/slasher
+      - ./data/sigmaprime/lighthouse:/root/.lighthouse
+      - ./config/jwtsecret:/root/jwtsecret
+    depends_on:
+      - geth
     ports:
-      - ${BEACON_API_IP}:5052:5052/tcp
-      - ${BEACON_API_IP}:8910:5054
+      - 5052:5052/tcp
+      - 8910:5054
       - 9000:9000/tcp
       - 9000:9000/udp
     networks:
       - n_vouch_beacons
       - n_bridge
-      - stereum-admin
     <<: *logging
 
-  teku_beacon:
-    container_name: teku_beacon
-    image: consensys/teku:${TEKU_DOCKER_TAG}
-    user: "0:0"
+  nimbus_beacon:
+    image: statusim/nimbus-eth2:${NIMBUS_DOCKER_TAG}
+    user: "0"
     restart: unless-stopped
-    command: ["--config-file=/opt/teku/beacon.yaml"]
-    environment:
-      - "JAVA_OPTS=-Xmx8g"
-    volumes:
-      - ./config/teku/beacon-mc.yaml:/opt/teku/beacon.yaml:ro
-      - ./data/consensys/teku:/opt/teku/data
+    command:
+      - --network=goerli
+      - --data-dir=/opt/app/beacon
+      - --validators-dir=/opt/app/validators
+      - --secrets-dir=/opt/app/secrets
+      - --web3-url=http://geth:8551
+      - --tcp-port=9001
+      - --udp-port=9001
+      - --rpc
+      - --rpc-port=9190
+      - --metrics
+      - --metrics-port=8008
+      - --metrics-address=0.0.0.0
+      - --rest
+      - --rest-address=0.0.0.0
+      - --suggested-fee-recipient=${SUGGESTED_FEE_RECIPIENT}
     ports:
-      - ${BEACON_API_IP}:5051:5051/tcp
-      - ${BEACON_API_IP}:8920:8008
+      - 9190:9190 # rpc
       - 9001:9001/tcp
       - 9001:9001/udp
+    volumes:
+      - ./data/nimbus/beacon:/opt/app/beacon
+      - ./data/nimbus/validator/validators:/opt/app/validators
+      - ./data/nimbus/validator/secrets:/opt/app/secrets
     networks:
       - n_vouch_beacons
       - n_bridge
-      - stereum-admin
     <<: *logging
 
   vouch:
-    container_name: vouch
     image: attestant/vouch:${VOUCH_DOCKER_TAG}
     restart: unless-stopped
     command: ["--base-dir=/config"]
@@ -113,7 +186,6 @@ services:
     <<: *logging
   
   dirk:
-    container_name: dirk
     image: attestant/dirk:${DIRK_DOCKER_TAG}
     restart: unless-stopped
     command: ["--base-dir=/config"]
@@ -127,15 +199,28 @@ services:
       - n_dirk_vouch
     <<: *logging
 
+  mevboost:
+    image: flashbots/mev-boost:${MEVBOOST_DOCKER_TAG}
+    restart: unless-stopped
+    command:
+      - -addr=0.0.0.0:18550
+      - -goerli
+      - -relay-check
+      - -relays=https://0xafa4c6985aa049fb79dd37010438cfebeb0f2bd42b115b89dd678dab0670c1de38da0c4e9138c9290a398ecd9a0b3110@boost-relay-goerli.flashbots.net
+      - -min-bid=0.02
+    networks:
+      - n_grafana_prometheus
+      - n_vouch_beacons
+    <<: *logging
+
   prometheus:
-    container_name: prometheus
     image: prom/prometheus:${PROMETHEUS_DOCKER_TAG}
-    user: root # https://github.com/prometheus/prometheus/issues/5976
+    user: root
     restart: unless-stopped
     hostname: prometheus
     command: --storage.tsdb.retention.time=7d --config.file=/etc/prometheus/prometheus.yml
     ports:
-      - ${BEACON_API_IP}:9090:9090
+      - 9090:9090
     volumes:
       - ./config/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
       - ./data/prometheus:/prometheus
@@ -146,16 +231,14 @@ services:
     <<: *logging
 
   grafana:
-    container_name: grafana
     image: grafana/grafana:${GRAFANA_DOCKER_TAG}
     restart: unless-stopped
     hostname: grafana
     user: "0"
     depends_on:
-      - stereum-init
       - prometheus
     ports:
-      - ${BEACON_API_IP}:3000:3000
+      - 3000:3000
     volumes:
       - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./data/grafana:/var/lib/grafana
@@ -194,17 +277,18 @@ networks:
     
   # vouch to beacons
   n_vouch_beacons:
-    internal: yes
-  
+    internal: true
+
+  # slasher to beacon:
+  n_slasher_beacon:
+    internal: true
+
   # dirk to vouch
   n_dirk_vouch:
-    internal: yes
+    internal: true
   
   # grafana to prometheus
   n_grafana_prometheus:
-    internal: yes
-  
-  stereum-admin:
     internal: true
 
 # EOF

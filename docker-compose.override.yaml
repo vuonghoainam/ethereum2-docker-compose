@@ -21,9 +21,13 @@ services:
     <<: *limit-node
   prysm_beacon:
     <<: *limit-node
+  prysm_validator:
+    <<: *limit-node
+  prysm_slasher:
+    <<: *limit-node
   lighthouse_beacon:
     <<: *limit-node
-  teku_beacon:
+  nimbus_beacon:
     <<: *limit-node
   vouch:
     <<: *limit-miniservice

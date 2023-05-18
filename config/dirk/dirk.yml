@@ -1,3 +1,5 @@
+# log-file is the location for Dirk log output.  If this is not provided logs will be written to the console.
+# log-file: /home/me/dirk.log
 # log-level is the global log level for Dirk logging.
 log-level: Debug
 
@@ -9,7 +11,9 @@ server:
   # listen-address is the interface and port on which Dirk will listen for requests; change `127.0.0.1`
   # to `0.0.0.0` to listen on all network interfaces.
   listen-address: 0.0.0.0:13141
-# storage-path is the path where information created by the slashing protection system is stored.
+#  rules:
+    # admin-ips is a list of IP addresses from which requests for voluntary exists will be accepted.
+#    admin-ips: [ 1.2.3.4, 5.6.7.8 ]
 storage-path: /data/protection
 certificates:
   # server-cert is the majordomo URL to the server's certificate.
@@ -19,16 +23,32 @@ certificates:
   # ca-cert is the certificate of the CA that issued the client certificates.  If not present Dirk will use
   # the standard CA certificates supplied with the server.
   ca-cert: file:///config/certs/ca.crt
+# storage-path is the path where information created by the slashing protection system is stored.  If not
+# supplied it will default to using the 'storage' directory in the user's home directory.
+
 # stores is a list of locations and types of Ethereum 2 stores.  If no stores are supplied Dirk will use the
 # default filesystem store.
 stores:
 - name: Local
   type: filesystem
   location: /wallets
+# - name: Remote
+#   type: s3
+#   # The s3 store comes with additional options.
+#   s3:
+#     region: us-west-1
+#     bucket: my-s3-store
+#     path: /wallets
+#     credentials:
+#       id: ABCDEF123
+#       secret: XXXXXXXXX
 metrics:
   # listen-address is where Dirk's Prometheus server will present.  If this value is not present then Dirk
   # will not gather metrics.
   listen-address: 0.0.0.0:8081
+# tracing-address is where Dirk's tracing information will be sent. If this value is not present then Dirk will
+# not generate tracing information.
+# tracing-address: address: metrics-server:12345
 peers:
   # These are the IDs and addresses of the peers with which Dirk can communicate for distributed key generation.
   # At a minimum it must include this instance.
