@@ -10,6 +10,7 @@ x-logging: &logging
 services:
   geth:
     image: ethereum/client-go:${GETH_DOCKER_TAG}
+    hostname: geth
     env_file: .env
     restart: unless-stopped
     command: 
@@ -18,7 +19,7 @@ services:
       - --http
       - --http.addr=0.0.0.0 
       - --http.vhosts="*"
-      - --http.api="db,eth,net,web3,personal"
+      - --http.api=admin,debug,web3,eth,txpool,personal,clique,miner,net
       - --authrpc.jwtsecret=/root/jwtsecret
       - --authrpc.vhosts=*
       - --authrpc.addr=0.0.0.0
@@ -36,13 +37,14 @@ services:
 
   prysm_beacon:
     image: gcr.io/prysmaticlabs/prysm/beacon-chain:${PRYSM_DOCKER_TAG}
+    hostname: prysm_beacon
+    env_file: .env
     restart: unless-stopped
     command:
       - --prater
       - --datadir=/data
-      - --jwt-secret=/jwtsecret
+      - --jwt-secret=/tmp/jwtsecret
       - --checkpoint-sync-url=https://goerli.beaconstate.info
-      - --genesis-beacon-api-url=https://goerli.beaconstate.info
       - --execution-endpoint=http://geth:8551
       - --suggested-fee-recipient=${SUGGESTED_FEE_RECIPIENT}
       - --grpc-gateway-host=0.0.0.0
@@ -56,7 +58,7 @@ services:
     volumes:
       - ./data/prysm/beacon:/data
       - ./data/prysm/genesis:/genesis
-      - ./config/jwtsecret:/jwtsecret
+      - ./config/jwtsecret:/tmp/jwtsecret
     ports:
       - 4000:4000
       - 3500:3500
@@ -64,84 +66,40 @@ services:
       - 13000/tcp
       - 12000/udp
     networks:
-      - n_vouch_beacons
-      - n_slasher_beacon
       - n_bridge
-    <<: *logging
-
-  prysm_validator:
-    image: gcr.io/prysmaticlabs/prysm/validator:latest
-    restart: unless-stopped
-    user: "0"
-    command:
-      - --prater
-      - --datadir=/data
-      - --suggested-fee-recipient=${SUGGESTED_FEE_RECIPIENT}
-      - --monitoring-host=0.0.0.0
-      - --beacon-rpc-provider=prysm_beacon:4000
-      - --wallet-dir=/data/wallets
-      - --wallet-password-file=/data/passphrases
-    volumes:
-      - ./data/prysm/beacon-slasher:/data
-      - ./data/prysm/genesis:/genesis
-      - ./config/jwtsecret:/jwtsecret
-      - ./wallets:/data/wallets:ro
-      - ./config/dirk/passphrases:/data/passphrases:ro
-    depends_on:
-      - prysm_beacon
-    networks:
-      - n_slasher_beacon
-    <<: *logging
-
-  prysm_slasher:
-    image: gcr.io/prysmaticlabs/prysm/slasher:latest
-    restart: unless-stopped
-    command:
-      - --prater
-      - --datadir=/data
-      - --monitoring-host=0.0.0.0
-      - --beacon-rpc-provider=prysm_beacon:4000
-    volumes:
-      - ./data/prysm/beacon-slasher:/data
-      - ./data/prysm/genesis:/genesis
-      - ./config/jwtsecret:/jwtsecret
-    depends_on:
-      - prysm_beacon
-    networks:
-      - n_slasher_beacon
     <<: *logging
 
   lighthouse_beacon:
     image: sigp/lighthouse:${LIGHTHOUSE_DOCKER_TAG}
-    restart: unless-stopped
+    hostname: lighthouse_beacon
     env_file: .env
+    restart: unless-stopped
     command:
       - lighthouse 
       - beacon_node
       - --network=goerli
       - --suggested-fee-recipient=${SUGGESTED_FEE_RECIPIENT}
-      - --execution-jwt=/root/jwtsecret
+      - --execution-jwt=/tmp/jwtsecret
       - --http 
       - --http-address=0.0.0.0
       - --checkpoint-sync-url=https://goerli.beaconstate.info
       - --execution-endpoint=http://geth:8551
     volumes:
       - ./data/sigmaprime/lighthouse:/root/.lighthouse
-      - ./config/jwtsecret:/root/jwtsecret
-    depends_on:
-      - geth
+      - ./config/jwtsecret:/tmp/jwtsecret
     ports:
       - 5052:5052/tcp
       - 8910:5054
       - 9000:9000/tcp
       - 9000:9000/udp
     networks:
-      - n_vouch_beacons
       - n_bridge
     <<: *logging
 
   nimbus_beacon:
     image: statusim/nimbus-eth2:${NIMBUS_DOCKER_TAG}
+    hostname: nimbus-beacon
+    env_file: .env
     user: "0"
     restart: unless-stopped
     command:
@@ -152,16 +110,16 @@ services:
       - --web3-url=http://geth:8551
       - --tcp-port=9001
       - --udp-port=9001
-      - --rpc
-      - --rpc-port=9190
       - --metrics
       - --metrics-port=8008
       - --metrics-address=0.0.0.0
       - --rest
+      - --rest-port=5052
       - --rest-address=0.0.0.0
+      - --rest-allow-origin=*
       - --suggested-fee-recipient=${SUGGESTED_FEE_RECIPIENT}
     ports:
-      - 9190:9190 # rpc
+      - 5053:5052 # rpc
       - 9001:9001/tcp
       - 9001:9001/udp
     volumes:
@@ -169,55 +127,39 @@ services:
       - ./data/nimbus/validator/validators:/opt/app/validators
       - ./data/nimbus/validator/secrets:/opt/app/secrets
     networks:
-      - n_vouch_beacons
       - n_bridge
     <<: *logging
 
-  vouch:
-    image: attestant/vouch:${VOUCH_DOCKER_TAG}
-    restart: unless-stopped
-    command: ["--base-dir=/config"]
-    volumes:
-      - ./config/vouch/vouch.yml:/config/vouch.yml:ro
-      - ./config/vouch/certs:/config/certs:ro
-    networks:
-      - n_dirk_vouch
-      - n_vouch_beacons
-    <<: *logging
+  # vouch:
+  #   image: attestant/vouch:${VOUCH_DOCKER_TAG}
+  #   restart: unless-stopped
+  #   command: ["--base-dir=/config"]
+  #   volumes:
+  #     - ./config/vouch/vouch.yml:/config/vouch.yml:ro
+  #     - ./config/vouch/certs:/config/certs:ro
+  #   networks:
+  #     - n_bridge
+  #   <<: *logging
   
-  dirk:
-    image: attestant/dirk:${DIRK_DOCKER_TAG}
-    restart: unless-stopped
-    command: ["--base-dir=/config"]
-    volumes:
-      - ./config/dirk/dirk.yml:/config/dirk.yml:ro
-      - ./config/dirk/certs:/config/certs:ro
-      - ./wallets:/wallets:ro
-      - ./config/dirk/passphrases:/config/passphrases:ro
-      - ./data/attestant/dirk:/data
-    networks:
-      - n_dirk_vouch
-    <<: *logging
-
-  mevboost:
-    image: flashbots/mev-boost:${MEVBOOST_DOCKER_TAG}
-    restart: unless-stopped
-    command:
-      - -addr=0.0.0.0:18550
-      - -goerli
-      - -relay-check
-      - -relays=https://0xafa4c6985aa049fb79dd37010438cfebeb0f2bd42b115b89dd678dab0670c1de38da0c4e9138c9290a398ecd9a0b3110@boost-relay-goerli.flashbots.net
-      - -min-bid=0.02
-    networks:
-      - n_grafana_prometheus
-      - n_vouch_beacons
-    <<: *logging
+  # dirk:
+  #   image: attestant/dirk:${DIRK_DOCKER_TAG}
+  #   restart: unless-stopped
+  #   command: ["--base-dir=/config"]
+  #   volumes:
+  #     - ./config/dirk/dirk.yml:/config/dirk.yml:ro
+  #     - ./config/dirk/certs:/config/certs:ro
+  #     - ./wallets:/wallets:ro
+  #     - ./config/dirk/passphrases:/config/passphrases:ro
+  #     - ./data/attestant/dirk:/data
+  #   networks:
+  #     - n_bridge
+  #   <<: *logging
 
   prometheus:
     image: prom/prometheus:${PROMETHEUS_DOCKER_TAG}
+    hostname: prometheus
     user: root
     restart: unless-stopped
-    hostname: prometheus
     command: --storage.tsdb.retention.time=7d --config.file=/etc/prometheus/prometheus.yml
     ports:
       - 9090:9090
@@ -225,9 +167,7 @@ services:
       - ./config/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
       - ./data/prometheus:/prometheus
     networks:
-      - n_grafana_prometheus
-      - n_dirk_vouch
-      - n_vouch_beacons
+      - n_bridge
     <<: *logging
 
   grafana:
@@ -247,7 +187,6 @@ services:
       GF_RENDERING_SERVER_URL: http://renderer:8082/render
       GF_RENDERING_CALLBACK_URL: http://grafana:3000    
     networks:
-      - n_grafana_prometheus
       - n_bridge
     <<: *logging
 
@@ -260,7 +199,7 @@ services:
       ENABLE_METRICS: 'true'
       HTTP_PORT: 8082
     networks:
-      - n_grafana_prometheus
+      - n_bridge
     <<: *logging
 
   node-exporter:
@@ -268,7 +207,7 @@ services:
     user: "0"
     hostname: node-exporter
     networks:
-      - n_grafana_prometheus
+      - n_bridge
     <<: *logging  
 
 networks:
@@ -276,19 +215,19 @@ networks:
   n_bridge:
     
   # vouch to beacons
-  n_vouch_beacons:
-    internal: true
+  # n_vouch_beacons:
+  #   internal: true
 
   # slasher to beacon:
-  n_slasher_beacon:
-    internal: true
+  # n_slasher_beacon:
+  #   internal: true
 
   # dirk to vouch
-  n_dirk_vouch:
-    internal: true
+  # n_dirk_vouch:
+  #   internal: true
   
   # grafana to prometheus
-  n_grafana_prometheus:
-    internal: true
+  # n_grafana_prometheus:
+  #   internal: true
 
 # EOF
