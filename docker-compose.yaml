@@ -32,58 +32,59 @@ services:
       - ./data/geth:/root/.ethereum
       - ./config/jwtsecret:/root/jwtsecret
     networks:
-      - n_bridge
+      - internet_access
     <<: *logging
 
-  prysm_beacon:
-    image: gcr.io/prysmaticlabs/prysm/beacon-chain:${PRYSM_DOCKER_TAG}
-    hostname: prysm_beacon
-    env_file: .env
-    restart: unless-stopped
-    command:
-      - --prater
-      - --datadir=/data
-      - --jwt-secret=/tmp/jwtsecret
-      - --checkpoint-sync-url=https://goerli.beaconstate.info
-      - --execution-endpoint=http://geth:8551
-      - --suggested-fee-recipient=${SUGGESTED_FEE_RECIPIENT}
-      - --grpc-gateway-host=0.0.0.0
-      - --grpc-gateway-port=3500
-      - --rpc-host=0.0.0.0
-      - --rpc-port=4000
-      - --monitoring-host=0.0.0.0
-      - --p2p-tcp-port=13000
-      - --p2p-max-peers=100
-      - --accept-terms-of-use
-    volumes:
-      - ./data/prysm/beacon:/data
-      - ./data/prysm/genesis:/genesis
-      - ./config/jwtsecret:/tmp/jwtsecret
-    ports:
-      - 4000:4000
-      - 3500:3500
-      - 8900:8080
-      - 13000/tcp
-      - 12000/udp
-    networks:
-      - n_bridge
-    <<: *logging
+  # prysm:
+  #   image: gcr.io/prysmaticlabs/prysm/beacon-chain:${PRYSM_DOCKER_TAG}
+  #   hostname: prysm
+  #   env_file: .env
+  #   restart: unless-stopped
+  #   command:
+  #     - --prater
+  #     - --datadir=/data
+  #     - --jwt-secret=/tmp/jwtsecret
+  #     - --checkpoint-sync-url=https://goerli.beaconstate.info
+  #     - --execution-endpoint=http://geth:8551
+  #     - --grpc-gateway-host=0.0.0.0
+  #     - --rpc-host=0.0.0.0
+  #     - --monitoring-host=0.0.0.0
+  #     - --p2p-tcp-port=13000
+  #     - --p2p-max-peers=100
+  #     - --accept-terms-of-use
+  #     - --block-batch-limit=512
+  #     - --genesis-state=/tmp/genesis.ssz
+  #     - --http-mev-relay=http://vouch:12345/
+  #   volumes:
+  #     - ./data/prysm/beacon:/data
+  #     - ./data/prysm/genesis:/genesis
+  #     - ./config/jwtsecret:/tmp/jwtsecret
+  #     - ./config/prysm/genesis.ssz:/tmp/genesis.ssz
+  #   ports:
+  #     - 4000:4000
+  #     - 3500:3500
+  #     - 8900:8080
+  #     - 13000/tcp
+  #     - 12000/udp
+  #   networks:
+  #     - internet_access
+  #   <<: *logging
 
-  lighthouse_beacon:
+  lighthouse:
     image: sigp/lighthouse:${LIGHTHOUSE_DOCKER_TAG}
-    hostname: lighthouse_beacon
+    hostname: lighthouse
     env_file: .env
     restart: unless-stopped
     command:
       - lighthouse 
       - beacon_node
       - --network=goerli
-      - --suggested-fee-recipient=${SUGGESTED_FEE_RECIPIENT}
       - --execution-jwt=/tmp/jwtsecret
       - --http 
       - --http-address=0.0.0.0
       - --checkpoint-sync-url=https://goerli.beaconstate.info
       - --execution-endpoint=http://geth:8551
+      - --builder=http://vouch:12345/
     volumes:
       - ./data/sigmaprime/lighthouse:/root/.lighthouse
       - ./config/jwtsecret:/tmp/jwtsecret
@@ -93,18 +94,20 @@ services:
       - 9000:9000/tcp
       - 9000:9000/udp
     networks:
-      - n_bridge
+      - internet_access
     <<: *logging
 
-  nimbus_beacon:
+  nimbus:
     image: statusim/nimbus-eth2:${NIMBUS_DOCKER_TAG}
-    hostname: nimbus-beacon
+    hostname: nimbus
     env_file: .env
     user: "0"
     restart: unless-stopped
     command:
       - --network=goerli
       - --data-dir=/opt/app/beacon
+      - --payload-builder
+      - --payload-builder-url=http://vouch:12345/
       - --validators-dir=/opt/app/validators
       - --secrets-dir=/opt/app/secrets
       - --web3-url=http://geth:8551
@@ -117,7 +120,6 @@ services:
       - --rest-port=5052
       - --rest-address=0.0.0.0
       - --rest-allow-origin=*
-      - --suggested-fee-recipient=${SUGGESTED_FEE_RECIPIENT}
     ports:
       - 5053:5052 # rpc
       - 9001:9001/tcp
@@ -127,33 +129,39 @@ services:
       - ./data/nimbus/validator/validators:/opt/app/validators
       - ./data/nimbus/validator/secrets:/opt/app/secrets
     networks:
-      - n_bridge
+      - internet_access
     <<: *logging
 
-  # vouch:
-  #   image: attestant/vouch:${VOUCH_DOCKER_TAG}
-  #   restart: unless-stopped
-  #   command: ["--base-dir=/config"]
-  #   volumes:
-  #     - ./config/vouch/vouch.yml:/config/vouch.yml:ro
-  #     - ./config/vouch/certs:/config/certs:ro
-  #   networks:
-  #     - n_bridge
-  #   <<: *logging
+  vouch:
+    image: attestant/vouch:${VOUCH_DOCKER_TAG}
+    hostname: vouch
+    restart: unless-stopped
+    command: ["--base-dir=/config"]
+    volumes:
+      - ./config/vouch/vouch.yml:/config/vouch.yml:ro
+      - ./config/vouch/certs:/config/certs:ro
+    networks:
+      - internet_access
+    ports:
+      - 12345:12345/tcp 
+    <<: *logging
   
-  # dirk:
-  #   image: attestant/dirk:${DIRK_DOCKER_TAG}
-  #   restart: unless-stopped
-  #   command: ["--base-dir=/config"]
-  #   volumes:
-  #     - ./config/dirk/dirk.yml:/config/dirk.yml:ro
-  #     - ./config/dirk/certs:/config/certs:ro
-  #     - ./wallets:/wallets:ro
-  #     - ./config/dirk/passphrases:/config/passphrases:ro
-  #     - ./data/attestant/dirk:/data
-  #   networks:
-  #     - n_bridge
-  #   <<: *logging
+  dirk:
+    image: attestant/dirk:${DIRK_DOCKER_TAG}
+    hostname: dirk
+    restart: unless-stopped
+    command: ["--base-dir=/config"]
+    volumes:
+      - ./config/dirk/dirk.yml:/config/dirk.yml:ro
+      - ./config/dirk/certs:/config/certs:ro
+      - ./wallets:/wallets:ro
+      - ./config/dirk/passphrases:/config/passphrases:ro
+      - ./data/attestant/dirk:/data
+    networks:
+      - internet_access
+    ports:
+      - 13141:13141/tcp 
+    <<: *logging
 
   prometheus:
     image: prom/prometheus:${PROMETHEUS_DOCKER_TAG}
@@ -167,7 +175,7 @@ services:
       - ./config/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
       - ./data/prometheus:/prometheus
     networks:
-      - n_bridge
+      - internet_access
     <<: *logging
 
   grafana:
@@ -187,7 +195,7 @@ services:
       GF_RENDERING_SERVER_URL: http://renderer:8082/render
       GF_RENDERING_CALLBACK_URL: http://grafana:3000    
     networks:
-      - n_bridge
+      - internet_access
     <<: *logging
 
   renderer:
@@ -199,7 +207,7 @@ services:
       ENABLE_METRICS: 'true'
       HTTP_PORT: 8082
     networks:
-      - n_bridge
+      - internet_access
     <<: *logging
 
   node-exporter:
@@ -207,12 +215,13 @@ services:
     user: "0"
     hostname: node-exporter
     networks:
-      - n_bridge
+      - internet_access
     <<: *logging  
 
 networks:
   # bridge network - this networks gets internet access!
-  n_bridge:
+  internet_access:
+    driver: bridge
     
   # vouch to beacons
   # n_vouch_beacons:

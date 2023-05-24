@@ -17,14 +17,14 @@ rule_files:
 scrape_configs:
   - job_name: 'prysm'
     static_configs:
-      - targets: ['prysm_beacon.example:8080']
+      - targets: ['prysm:8080']
   - job_name: 'lighthouse'
     static_configs:
-      - targets: ['lighthouse_beacon.example:5054']
+      - targets: ['lighthouse:5054']
   - job_name: 'nimbus'
     metrics_path: /metrics
     static_configs:
-      - targets: ['nimbus_beacon.example:8008']
+      - targets: ['nimbus:8008']
   # - job_name: 'vouch1'
   #   static_configs:
   #     - targets: ['vouch:8081']
