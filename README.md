@@ -15,5 +15,10 @@ cp -r ~/.config/ethereum2/wallets/* wallets/.
 openssl rand -hex 32 | tr -d "\n" > config/jwt.hex
 
 sudo timedatectl set-ntp on
+
+./deposit new-mnemonic --num_validators=3 --mnemonic_language=english --chain=prater
+
+Thì ra 3 cái key và 1 cái deposit data rồi
+deposit_data-1684486837.json  keystore-m_12381_3600_0_0_0-1684486835.json  keystore-m_12381_3600_1_0_0-1684486836.json  keystore-m_12381_3600_2_0_0-1684486837.json
 ```
 

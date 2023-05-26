@@ -19,16 +19,18 @@ x-limit-miniservice:
 services:
   geth:
     <<: *limit-node
-  # prysm:
-  #   <<: *limit-node
+  prysm:
+    <<: *limit-node
+  teku:
+    <<: *limit-node
   lighthouse:
     <<: *limit-node
   nimbus:
     <<: *limit-node
-  vouch:
-    <<: *limit-miniservice
-  dirk:
-    <<: *limit-miniservice
+  # vouch:
+  #   <<: *limit-miniservice
+  # dirk:
+  #   <<: *limit-miniservice
   prometheus:
     <<: *limit-miniservice
   grafana:

@@ -19,6 +19,8 @@ services:
       - --http
       - --http.addr=0.0.0.0 
       - --http.vhosts="*"
+      - --http.port=8545
+      - --allow-insecure-unlock
       - --http.api=admin,debug,web3,eth,txpool,personal,clique,miner,net
       - --authrpc.jwtsecret=/root/jwtsecret
       - --authrpc.vhosts=*
@@ -26,8 +28,9 @@ services:
     stop_grace_period: 5m
     ports:
       - 30303:30303/tcp
-      - 30303:30303/udp
+      - 30303/udp
       - 8551:8551
+      - 8545:8545
     volumes:
       - ./data/geth:/root/.ethereum
       - ./config/jwtsecret:/root/jwtsecret
@@ -35,40 +38,40 @@ services:
       - internet_access
     <<: *logging
 
-  # prysm:
-  #   image: gcr.io/prysmaticlabs/prysm/beacon-chain:${PRYSM_DOCKER_TAG}
-  #   hostname: prysm
-  #   env_file: .env
-  #   restart: unless-stopped
-  #   command:
-  #     - --prater
-  #     - --datadir=/data
-  #     - --jwt-secret=/tmp/jwtsecret
-  #     - --checkpoint-sync-url=https://goerli.beaconstate.info
-  #     - --execution-endpoint=http://geth:8551
-  #     - --grpc-gateway-host=0.0.0.0
-  #     - --rpc-host=0.0.0.0
-  #     - --monitoring-host=0.0.0.0
-  #     - --p2p-tcp-port=13000
-  #     - --p2p-max-peers=100
-  #     - --accept-terms-of-use
-  #     - --block-batch-limit=512
-  #     - --genesis-state=/tmp/genesis.ssz
-  #     - --http-mev-relay=http://vouch:12345/
-  #   volumes:
-  #     - ./data/prysm/beacon:/data
-  #     - ./data/prysm/genesis:/genesis
-  #     - ./config/jwtsecret:/tmp/jwtsecret
-  #     - ./config/prysm/genesis.ssz:/tmp/genesis.ssz
-  #   ports:
-  #     - 4000:4000
-  #     - 3500:3500
-  #     - 8900:8080
-  #     - 13000/tcp
-  #     - 12000/udp
-  #   networks:
-  #     - internet_access
-  #   <<: *logging
+  prysm:
+    image: gcr.io/prysmaticlabs/prysm/beacon-chain:${PRYSM_DOCKER_TAG}
+    hostname: prysm
+    env_file: .env
+    restart: unless-stopped
+    command:
+      - --prater
+      - --datadir=/data
+      - --jwt-secret=/tmp/jwtsecret
+      - --checkpoint-sync-url=https://goerli.beaconstate.info
+      - --execution-endpoint=http://geth:8551
+      - --grpc-gateway-host=0.0.0.0
+      - --rpc-host=0.0.0.0
+      - --monitoring-host=0.0.0.0
+      - --p2p-tcp-port=13000
+      - --p2p-max-peers=100
+      - --accept-terms-of-use
+      - --block-batch-limit=512
+      - --genesis-state=/tmp/genesis.ssz
+      # - --http-mev-relay=http://vouch:12345/
+    volumes:
+      - ./data/prysm/beacon:/data
+      - ./data/prysm/genesis:/genesis
+      - ./config/jwtsecret:/tmp/jwtsecret
+      - ./config/prysm/genesis.ssz:/tmp/genesis.ssz
+    ports:
+      - 4000:4000
+      - 3500:3500
+      - 8900:8080
+      - 13000/tcp
+      - 12000/udp
+    networks:
+      - internet_access
+    <<: *logging
 
   lighthouse:
     image: sigp/lighthouse:${LIGHTHOUSE_DOCKER_TAG}
@@ -84,15 +87,15 @@ services:
       - --http-address=0.0.0.0
       - --checkpoint-sync-url=https://goerli.beaconstate.info
       - --execution-endpoint=http://geth:8551
-      - --builder=http://vouch:12345/
+      # - --builder=http://vouch:12345/
     volumes:
       - ./data/sigmaprime/lighthouse:/root/.lighthouse
       - ./config/jwtsecret:/tmp/jwtsecret
     ports:
       - 5052:5052/tcp
-      - 8910:5054
-      - 9000:9000/tcp
-      - 9000:9000/udp
+      - 5054
+      - 9000/tcp
+      - 9000/udp
     networks:
       - internet_access
     <<: *logging
@@ -107,9 +110,9 @@ services:
       - --network=goerli
       - --data-dir=/opt/app/beacon
       - --payload-builder
-      - --payload-builder-url=http://vouch:12345/
+      # - --payload-builder-url=http://vouch:12345/
       - --validators-dir=/opt/app/validators
-      - --secrets-dir=/opt/app/secrets
+      - --jwt-secret=/tmp/jwtsecret
       - --web3-url=http://geth:8551
       - --tcp-port=9001
       - --udp-port=9001
@@ -122,46 +125,82 @@ services:
       - --rest-allow-origin=*
     ports:
       - 5053:5052 # rpc
-      - 9001:9001/tcp
-      - 9001:9001/udp
+      - 9001/tcp
+      - 9001/udp
     volumes:
       - ./data/nimbus/beacon:/opt/app/beacon
       - ./data/nimbus/validator/validators:/opt/app/validators
-      - ./data/nimbus/validator/secrets:/opt/app/secrets
+      - ./config/jwtsecret:/tmp/jwtsecret
     networks:
       - internet_access
     <<: *logging
 
-  vouch:
-    image: attestant/vouch:${VOUCH_DOCKER_TAG}
-    hostname: vouch
+  teku:
+    hostname: teku
+    env_file: .env
+    image: consensys/teku:${TEKU_DOCKER_TAG}
+    user: "0:0"
     restart: unless-stopped
-    command: ["--base-dir=/config"]
+    command:
+      - --network=goerli
+      - --ee-endpoint=http://geth:8551
+      - --ee-jwt-secret-file=/tmp/jwtsecret
+      - --metrics-port=8008
+      - --metrics-interface=0.0.0.0
+      - --metrics-host-allowlist="*"
+      - --data-path=/opt/teku/data
+      - --data-storage-mode=archive
+      - --rest-api-port=5051
+      - --rest-api-host-allowlist=*
+      - --rest-api-interface=0.0.0.0
+      - --rest-api-enabled
+      - --log-destination=CONSOLE
+      - --p2p-enabled
+      - --p2p-port=9001
+    environment:
+      - "JAVA_OPTS=-Xmx8g"
     volumes:
-      - ./config/vouch/vouch.yml:/config/vouch.yml:ro
-      - ./config/vouch/certs:/config/certs:ro
+      - ./data/consensys/teku:/opt/teku/data
+      - ./config/jwtsecret:/tmp/jwtsecret
+    ports:
+      - 5051:5051/tcp
+      - 8008
+      - 9001/tcp
+      - 9001/udp
     networks:
       - internet_access
-    ports:
-      - 12345:12345/tcp 
     <<: *logging
+
+  # vouch:
+  #   image: attestant/vouch:${VOUCH_DOCKER_TAG}
+  #   hostname: vouch
+  #   restart: unless-stopped
+  #   command: ["--base-dir=/config"]
+  #   volumes:
+  #     - ./config/vouch/vouch.yml:/config/vouch.yml:ro
+  #     - ./config/vouch/certs:/config/certs:ro
+  #   networks:
+  #     - internet_access
+  #   ports:
+  #     - 12345:12345/tcp 
+  #   <<: *logging
   
-  dirk:
-    image: attestant/dirk:${DIRK_DOCKER_TAG}
-    hostname: dirk
-    restart: unless-stopped
-    command: ["--base-dir=/config"]
-    volumes:
-      - ./config/dirk/dirk.yml:/config/dirk.yml:ro
-      - ./config/dirk/certs:/config/certs:ro
-      - ./wallets:/wallets:ro
-      - ./config/dirk/passphrases:/config/passphrases:ro
-      - ./data/attestant/dirk:/data
-    networks:
-      - internet_access
-    ports:
-      - 13141:13141/tcp 
-    <<: *logging
+  # dirk:
+  #   image: attestant/dirk:${DIRK_DOCKER_TAG}
+  #   hostname: dirk
+  #   restart: unless-stopped
+  #   command: ["--base-dir=/config"]
+  #   volumes:
+  #     - ./config/dirk/dirk.yml:/config/dirk.yml:ro
+  #     - ./config/dirk/certs:/config/certs:ro
+  #     - ./wallets:/wallets:ro
+  #     - ./config/dirk/passphrases:/config/passphrases:ro
+  #     - ./data/attestant/dirk:/data
+  #   networks:
+  #     - internet_access
+  #   ports:
+  #     - 13141:13141/tcp 
+  #   <<: *logging
 
   prometheus:
     image: prom/prometheus:${PROMETHEUS_DOCKER_TAG}
@@ -170,7 +209,7 @@ services:
     restart: unless-stopped
     command: --storage.tsdb.retention.time=7d --config.file=/etc/prometheus/prometheus.yml
     ports:
-      - 9090:9090
+      - 9090
     volumes:
       - ./config/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
       - ./data/prometheus:/prometheus
