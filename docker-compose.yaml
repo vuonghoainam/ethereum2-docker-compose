@@ -57,7 +57,7 @@ services:
       - --accept-terms-of-use
       - --block-batch-limit=512
       - --genesis-state=/tmp/genesis.ssz
-      # - --http-mev-relay=http://vouch:12345/
+      - --http-mev-relay=http://139.180.146.119:12345/
     volumes:
       - ./data/prysm/beacon:/data
       - ./data/prysm/genesis:/genesis
@@ -87,7 +87,7 @@ services:
       - --http-address=0.0.0.0
       - --checkpoint-sync-url=https://goerli.beaconstate.info
       - --execution-endpoint=http://geth:8551
-      # - --builder=http://vouch:12345/
+      - --builder=http://139.180.146.119:12345/
     volumes:
       - ./data/sigmaprime/lighthouse:/root/.lighthouse
       - ./config/jwtsecret:/tmp/jwtsecret
@@ -110,7 +110,7 @@ services:
       - --network=goerli
       - --data-dir=/opt/app/beacon
       - --payload-builder
-      # - --payload-builder-url=http://vouch:12345/
+      - --payload-builder-url=http://139.180.146.119:12345/
       - --validators-dir=/opt/app/validators
       - --jwt-secret=/tmp/jwtsecret
       - --web3-url=http://geth:8551
@@ -157,6 +157,7 @@ services:
       - --log-destination=CONSOLE
       - --p2p-enabled
       - --p2p-port=9001
+      - --builder-endpoint=http://139.180.146.119:12345/
     environment:
       - "JAVA_OPTS=-Xmx8g"
     volumes:
@@ -170,37 +171,6 @@ services:
     networks:
       - internet_access
     <<: *logging
-
-  # vouch:
-  #   image: attestant/vouch:${VOUCH_DOCKER_TAG}
-  #   hostname: vouch
-  #   restart: unless-stopped
-  #   command: ["--base-dir=/config"]
-  #   volumes:
-  #     - ./config/vouch/vouch.yml:/config/vouch.yml:ro
-  #     - ./config/vouch/certs:/config/certs:ro
-  #   networks:
-  #     - internet_access
-  #   ports:
-  #     - 12345:12345/tcp 
-  #   <<: *logging
-  
-  # dirk:
-  #   image: attestant/dirk:${DIRK_DOCKER_TAG}
-  #   hostname: dirk
-  #   restart: unless-stopped
-  #   command: ["--base-dir=/config"]
-  #   volumes:
-  #     - ./config/dirk/dirk.yml:/config/dirk.yml:ro
-  #     - ./config/dirk/certs:/config/certs:ro
-  #     - ./wallets:/wallets:ro
-  #     - ./config/dirk/passphrases:/config/passphrases:ro
-  #     - ./data/attestant/dirk:/data
-  #   networks:
-  #     - internet_access
-  #   ports:
-  #     - 13141:13141/tcp 
-  #   <<: *logging
 
   prometheus:
     image: prom/prometheus:${PROMETHEUS_DOCKER_TAG}
